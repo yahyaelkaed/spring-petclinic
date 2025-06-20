@@ -42,8 +42,8 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'docker-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker tag $DOCKER_IMAGE yourusername/petclinic
-                        docker push yourusername/petclinic
+                        docker tag $DOCKER_IMAGE yahyaelkaed/petclinic
+                        docker push yahyaelkaed/petclinic
                     """
                 }
             }
