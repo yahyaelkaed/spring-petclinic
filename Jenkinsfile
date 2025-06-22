@@ -31,7 +31,7 @@
     stage('Docker Build') {
       steps {
         script {
-          docker.build("petclinic:${env.BUILD_NUMBER}").push()
+          docker.build("petclinic:${env.BUILD_NUMBER}")
         }
       }
     }
