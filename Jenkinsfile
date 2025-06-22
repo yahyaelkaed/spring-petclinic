@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         SONAR_SCANNER_HOME = tool 'SonarQubeScanner'
-        MAVEN_HOME = tool 'Maven 3.8'
+        MAVEN_HOME = tool 'maven-3.8.6'
         PATH = "${MAVEN_HOME}/bin:${PATH}"
         DOCKER_IMAGE = "yahyaelkaed/petclinic:${BUILD_NUMBER}"
     }
