@@ -32,15 +32,27 @@ pipeline {
         }
 
         stage('Deploy to Nexus') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    sh '''
-                        mvn deploy \
-                          -DaltDeploymentRepository=nexus::default::http://nexus:8081/repository/maven-releases/ \
-                          -Dnexus.username=$NEXUS_USER -Dnexus.password=$NEXUS_PASS
-                    '''
-                }
+          steps {
+            withCredentials([usernamePassword(credentialsId: '97555644-c9ef-4df8-80d6-26f2cc28440c', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+              writeFile file: 'settings.xml', text: """
+        <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                      http://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <servers>
+            <server>
+              <id>nexus</id>
+              <username>${NEXUS_USER}</username>
+              <password>${NEXUS_PASS}</password>
+            </server>
+          </servers>
+        </settings>
+        """
+              sh '''
+                mvn deploy -s settings.xml -DaltDeploymentRepository=nexus::default::http://nexus:8081/repository/maven-releases/
+              '''
             }
+          }
         }
 
         stage('Docker Build & Push') {
