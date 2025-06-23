@@ -443,9 +443,6 @@
         </pluginManagement>
       </build>
     </profile>
-    
-  </profiles>
-  <profiles>
     <profile>
         <id>no-checkstyle</id>
         <build>
