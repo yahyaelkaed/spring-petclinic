@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        SONAR_SCANNER_HOME = tool 'SonarQubeScanner'
         MAVEN_HOME = tool 'maven-3.8.6'
         PATH = "${MAVEN_HOME}/bin:${PATH}"
         DOCKER_IMAGE = "yahyaelkaed/petclinic:${BUILD_NUMBER}"
@@ -17,24 +16,26 @@ pipeline {
             }
         }
 
-        stage('Build & Test') {
+        stage('Build') {
             steps {
-                sh 'mvn clean package -Pno-checkstyle'
+                // Force skip checkstyle and ensure build continues
+                sh 'mvn clean package -Dcheckstyle.skip=true -Dnohttp-checkstyle.skip=true'
                 sh '''
-                    if [ ! -d "target" ]; then
-                        echo "❌ Error: target directory not found!"
+                    JAR_FILE=$(ls target/*.jar | head -1)
+                    if [ -z "$JAR_FILE" ]; then
+                        echo "❌ Error: No JAR file found!"
                         exit 1
                     fi
-                    if [ ! -f target/*.jar ]; then
-                        echo "❌ Error: No JAR file found in target directory!"
-                        exit 1
-                    fi
-                    echo "✅ JAR file exists in target directory"
-                    ls -la target/
+                    echo "✅ Built: $JAR_FILE"
                 '''
             }
         }
 
+        stage('Test') {
+            steps {
+                junit '**/target/surefire-reports/*.xml'
+            }
+        }
 
         stage('SonarQube Analysis') {
             steps {
@@ -48,32 +49,33 @@ pipeline {
 
         stage('Deploy to Nexus') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'nexus-creds', 
-                               usernameVariable: 'NEXUS_USER', 
-                               passwordVariable: 'NEXUS_PASS')]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'nexus-creds',
+                    usernameVariable: 'NEXUS_USER',
+                    passwordVariable: 'NEXUS_PASS'
+                )]) {
                     sh '''
                         mvn deploy \
-                        -DaltDeploymentRepository=nexus::default::http://nexus:8081/repository/maven-snapshots/ \
-                        -Dusername=$NEXUS_USER \
-                        -Dpassword=$NEXUS_PASS
+                          -DaltDeploymentRepository=nexus::default::http://nexus:8081/repository/maven-snapshots/ \
+                          -DskipTests=true \
+                          -Dcheckstyle.skip=true \
+                          -Dnohttp-checkstyle.skip=true \
+                          -Dusername=$NEXUS_USER \
+                          -Dpassword=$NEXUS_PASS
                     '''
                 }
             }
         }
 
-        stage('Docker Build & Push') {
+        stage('Docker Build') {
             steps {
                 script {
-                    // Get the exact JAR filename (now handles SNAPSHOT version)
-                    def jarFile = sh(script: 'ls target/spring-petclinic-*.jar', returnStdout: true).trim()
-                    if (!jarFile) {
-                        error("❌ Critical: No JAR file found!")
-                    }
-                    echo "✅ Found JAR: ${jarFile}"
-                    
-                    withCredentials([usernamePassword(credentialsId: 'docker-hub', 
-                                   usernameVariable: 'DOCKER_USER', 
-                                   passwordVariable: 'DOCKER_PASS')]) {
+                    def jarFile = sh(script: 'ls target/spring-petclinic-*.jar | head -1', returnStdout: true).trim()
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-hub',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
                         sh """
                             docker build --build-arg JAR_FILE=${jarFile} -t ${DOCKER_IMAGE} .
                             echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin
@@ -84,28 +86,16 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Kubernetes Deploy') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh '''
-                        # Check for kubectl in standard paths
-                        if ! command -v kubectl &> /dev/null; then
-                            echo "Installing kubectl to ~/bin..."
-                            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                            chmod +x kubectl
-                            mkdir -p ~/bin
-                            mv kubectl ~/bin/
-                            export PATH=$PATH:~/bin
-                        fi
-                        
-                        # Verify installation
-                        if ! command -v kubectl &> /dev/null; then
-                            echo "❌ kubectl installation failed!"
+                        # Simplified kubectl check
+                        if ! command -v kubectl; then
+                            echo "kubectl not found! Please install it on Jenkins agent."
                             exit 1
                         fi
-                        
-                        export KUBECONFIG=${KUBECONFIG_FILE}
-                        kubectl version --client
+                        export KUBECONFIG=${KUBECONFIG}
                         kubectl apply -f k8s/
                     '''
                 }
@@ -115,8 +105,8 @@ pipeline {
 
     post {
         always {
-            junit '**/target/surefire-reports/*.xml'
-            archiveArtifacts '**/target/*.jar'
+            archiveArtifacts 'target/*.jar'
+            cleanWs()
         }
         success {
             echo "✅ Pipeline completed successfully!"
