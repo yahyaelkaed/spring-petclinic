@@ -18,6 +18,7 @@ pipeline {
         stage('Build & Test') {
             steps {
                 sh 'mvn clean package'
+                sh 'ls -la target/ || echo "No target directory found!"
             }
         }
 
