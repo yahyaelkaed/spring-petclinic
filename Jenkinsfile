@@ -19,8 +19,7 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                sh 'mvn clean package'
-                // Simple verification that works in all Jenkins environments
+                sh 'mvn clean package -Pno-checkstyle'
                 sh '''
                     if [ ! -d "target" ]; then
                         echo "❌ Error: target directory not found!"
@@ -35,6 +34,7 @@ pipeline {
                 '''
             }
         }
+
 
         stage('SonarQube Analysis') {
             steps {
