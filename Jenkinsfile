@@ -18,7 +18,6 @@ pipeline {
 
         stage('Build') {
             steps {
-                // Force skip checkstyle and ensure build continues
                 sh 'mvn clean package -Dcheckstyle.skip=true -Dnohttp-checkstyle.skip=true'
                 sh '''
                     JAR_FILE=$(ls target/*.jar | head -1)
@@ -88,15 +87,38 @@ pipeline {
 
         stage('Kubernetes Deploy') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                    // Uses the Kubernetes CLI plugin
-                    kubernetesCli(
-                        kubeconfig: "${KUBECONFIG}",
-                        command: "apply -f k8s/",
-                        // Optional: Install specific kubectl version
-                        installKubectl: true,
-                        kubectlVersion: 'v1.29.0' // Match your cluster version
-                    )
+                script {
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                        // Method 1: Using withKubeConfig (recommended)
+                        withKubeConfig([credentialsId: 'kubeconfig']) {
+                            sh '''
+                                kubectl version --client
+                                kubectl apply -f k8s/
+                            '''
+                        }
+
+                        // Method 2: Fallback manual installation (uncomment if needed)
+                        /*
+                        if (!isUnix()) {
+                            error("Windows agents not supported for Kubernetes deployment")
+                        }
+                        
+                        sh '''
+                            # Install kubectl if missing
+                            if ! command -v kubectl >/dev/null 2>&1; then
+                                echo "Installing kubectl..."
+                                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                                chmod +x kubectl
+                                mkdir -p "$HOME/bin"
+                                mv kubectl "$HOME/bin/"
+                                export PATH="$PATH:$HOME/bin"
+                            fi
+                            
+                            export KUBECONFIG=${KUBECONFIG}
+                            kubectl apply -f k8s/
+                        '''
+                        */
+                    }
                 }
             }
         }
