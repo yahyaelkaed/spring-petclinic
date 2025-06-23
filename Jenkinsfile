@@ -18,7 +18,15 @@ pipeline {
         stage('Build & Test') {
             steps {
                 sh 'mvn clean package'
-                sh 'ls -la target/ || echo "No target directory found!"
+                // Enhanced verification
+                script {
+                    def jarFiles = findFiles(glob: '**/target/*.jar')
+                    if (jarFiles.isEmpty()) {
+                        error("❌ No JAR file found! Check Maven build logs.")
+                    } else {
+                        echo "✅ Found JAR: ${jarFiles[0].path}"
+                    }
+                }
             }
         }
 
@@ -48,12 +56,23 @@ pipeline {
 
         stage('Docker Build & Push') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh """
-                        docker build -t $DOCKER_IMAGE .
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker push $DOCKER_IMAGE
-                    """
+                script {
+                    // Verify JAR exists again before Docker build
+                    def jarPath = findFiles(glob: '**/target/*.jar')[0]?.path
+                    if (!jarPath) {
+                        error("❌ Critical: JAR missing before Docker build!")
+                    }
+                    
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub', 
+                                   usernameVariable: 'DOCKER_USER', 
+                                   passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            # Build with explicit path context
+                            docker build --build-arg JAR_PATH=${jarPath} -t $DOCKER_IMAGE .
+                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                            docker push $DOCKER_IMAGE
+                        """
+                    }
                 }
             }
         }
