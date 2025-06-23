@@ -88,12 +88,20 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
                     sh '''
-                        # Verify kubectl is installed
+                        # Check for kubectl in standard paths
                         if ! command -v kubectl &> /dev/null; then
-                            echo "Installing kubectl..."
+                            echo "Installing kubectl to ~/bin..."
                             curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
                             chmod +x kubectl
-                            sudo mv kubectl /usr/local/bin/
+                            mkdir -p ~/bin
+                            mv kubectl ~/bin/
+                            export PATH=$PATH:~/bin
+                        fi
+                        
+                        # Verify installation
+                        if ! command -v kubectl &> /dev/null; then
+                            echo "❌ kubectl installation failed!"
+                            exit 1
                         fi
                         
                         export KUBECONFIG=${KUBECONFIG_FILE}
