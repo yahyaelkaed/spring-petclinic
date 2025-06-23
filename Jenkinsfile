@@ -88,7 +88,16 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
                     sh '''
+                        # Verify kubectl is installed
+                        if ! command -v kubectl &> /dev/null; then
+                            echo "Installing kubectl..."
+                            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                            chmod +x kubectl
+                            sudo mv kubectl /usr/local/bin/
+                        fi
+                        
                         export KUBECONFIG=${KUBECONFIG_FILE}
+                        kubectl version --client
                         kubectl apply -f k8s/
                     '''
                 }
