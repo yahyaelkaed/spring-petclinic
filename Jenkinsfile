@@ -86,41 +86,21 @@ pipeline {
         }
 
         stage('Kubernetes Deploy') {
-            steps {
-                script {
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                        // Method 1: Using withKubeConfig (recommended)
-                        withKubeConfig([credentialsId: 'kubeconfig']) {
-                            sh '''
-                                kubectl version --client
-                                kubectl apply -f k8s/
-                            '''
-                        }
-
-                        // Method 2: Fallback manual installation (uncomment if needed)
-                        /*
-                        if (!isUnix()) {
-                            error("Windows agents not supported for Kubernetes deployment")
-                        }
-                        
-                        sh '''
-                            # Install kubectl if missing
-                            if ! command -v kubectl >/dev/null 2>&1; then
-                                echo "Installing kubectl..."
-                                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                                chmod +x kubectl
-                                mkdir -p "$HOME/bin"
-                                mv kubectl "$HOME/bin/"
-                                export PATH="$PATH:$HOME/bin"
-                            fi
-                            
-                            export KUBECONFIG=${KUBECONFIG}
-                            kubectl apply -f k8s/
-                        '''
-                        */
-                    }
-                }
+          steps {
+            withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+              withKubeConfig([credentialsId: 'kubeconfig']) {
+                sh '''
+                  # Download kubectl locally
+                  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                  chmod +x ./kubectl
+        
+                  # Run kubectl using ./kubectl explicitly
+                  ./kubectl version --client
+                  ./kubectl apply -f k8s/
+                '''
+              }
             }
+          }
         }
     }
 
