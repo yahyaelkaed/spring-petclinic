@@ -64,14 +64,13 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 script {
-                    // Get the exact JAR filename using shell
-                    def jarFile = sh(script: 'ls target/*.jar | head -1', returnStdout: true).trim()
+                    // Get the exact JAR filename (now handles SNAPSHOT version)
+                    def jarFile = sh(script: 'ls target/spring-petclinic-*.jar', returnStdout: true).trim()
                     if (!jarFile) {
-                        error("❌ Critical: No JAR file found in target directory!")
+                        error("❌ Critical: No JAR file found!")
                     }
-                    echo "✅ Found JAR file: ${jarFile}"
+                    echo "✅ Found JAR: ${jarFile}"
                     
-                    // Build Docker image with the found JAR file
                     withCredentials([usernamePassword(credentialsId: 'docker-hub', 
                                    usernameVariable: 'DOCKER_USER', 
                                    passwordVariable: 'DOCKER_PASS')]) {
