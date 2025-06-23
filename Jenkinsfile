@@ -89,15 +89,14 @@ pipeline {
         stage('Kubernetes Deploy') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                    sh '''
-                        # Simplified kubectl check
-                        if ! command -v kubectl; then
-                            echo "kubectl not found! Please install it on Jenkins agent."
-                            exit 1
-                        fi
-                        export KUBECONFIG=${KUBECONFIG}
-                        kubectl apply -f k8s/
-                    '''
+                    // Uses the Kubernetes CLI plugin
+                    kubernetesCli(
+                        kubeconfig: "${KUBECONFIG}",
+                        command: "apply -f k8s/",
+                        // Optional: Install specific kubectl version
+                        installKubectl: true,
+                        kubectlVersion: 'v1.29.0' // Match your cluster version
+                    )
                 }
             }
         }
