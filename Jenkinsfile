@@ -98,6 +98,8 @@ pipeline {
                             sed 's|image: petclinic:\${BUILD_NUMBER}|image: yahyaelkaed/petclinic:${BUILD_NUMBER}|' k8s/deployment.yaml > k8s/deployment-fixed.yaml
                             kubectl apply --validate=false -f k8s/deployment-fixed.yaml
                         """
+
+                        sh 'kubectl apply -f k8s/service.yaml'
                     }
                 }
             }
