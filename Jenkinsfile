@@ -97,16 +97,24 @@ pipeline {
                         mkdir -p $HOME/.minikube
                         mkdir -p $HOME/.kube
         
-                        # Copy kubeconfig and certs to home directory or workspace
+                        # Copy kubeconfig and certs
                         cp $KUBECONFIG_FILE $HOME/.kube/config
                         cp $CLIENT_CRT $HOME/.minikube/client.crt
                         cp $CLIENT_KEY $HOME/.minikube/client.key
                         cp $CA_CRT $HOME/.minikube/ca.crt
         
-                        # Optional: Show current context for debug
+                        # Download kubectl binary
+                        curl -LO https://dl.k8s.io/release/v1.33.2/bin/linux/amd64/kubectl
+                        chmod +x kubectl
+                        mv kubectl /usr/local/bin/
+        
+                        # Verify kubectl
+                        kubectl version --client
+        
+                        # Show current context for debug
                         kubectl config current-context
         
-                        # Test kubectl access
+                        # Test access permissions
                         kubectl auth can-i get pods
                     '''
                 }
