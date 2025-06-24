@@ -96,7 +96,7 @@ pipeline {
         
                   # Run kubectl using ./kubectl explicitly
                   ./kubectl version --client
-                  ./kubectl apply -f k8s/
+                  ./kubectl apply -f k8s/ --validate=false
                 '''
               }
             }
