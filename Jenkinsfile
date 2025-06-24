@@ -88,13 +88,17 @@ pipeline {
         stage('Kubernetes Deploy') {
             steps {
                 withCredentials([file(credentialsId: 'minikube-kubeconfig1', variable: 'KUBECONFIG_FILE')]) {
-                    sh '''
-                        mkdir -p $HOME/.kube
-                        cp $KUBECONFIG_FILE $HOME/.kube/config
-                        kubectl config current-context
-                        kubectl get nodes
-                        kubectl apply -f your-k8s-deployment.yaml
-                    '''
+                    script {
+                        sh '''
+                            mkdir -p $HOME/.kube
+                            cp $KUBECONFIG_FILE $HOME/.kube/config
+                        '''
+                        // Replace image tag in deployment file and apply it
+                        sh """
+                            sed 's|image: petclinic:\${BUILD_NUMBER}|image: yahyaelkaed/petclinic:${BUILD_NUMBER}|' k8s/deployment.yaml > k8s/deployment-fixed.yaml
+                            kubectl apply -f k8s/deployment-fixed.yaml
+                        """
+                    }
                 }
             }
         }
