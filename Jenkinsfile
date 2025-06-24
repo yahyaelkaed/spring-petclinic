@@ -87,35 +87,13 @@ pipeline {
 
         stage('Kubernetes Deploy') {
             steps {
-                withCredentials([
-                    file(credentialsId: 'minikube-kubeconfig', variable: 'KUBECONFIG_FILE'),
-                    file(credentialsId: 'client-crt', variable: 'CLIENT_CRT'),
-                    file(credentialsId: 'client-key', variable: 'CLIENT_KEY'),
-                    file(credentialsId: 'ca-crt', variable: 'CA_CRT')
-                ]) {
+                withCredentials([file(credentialsId: 'minikube-kubeconfig1', variable: 'KUBECONFIG_FILE')]) {
                     sh '''
-                        mkdir -p $HOME/.minikube
                         mkdir -p $HOME/.kube
-        
-                        # Copy kubeconfig and certs
                         cp $KUBECONFIG_FILE $HOME/.kube/config
-                        cp $CLIENT_CRT $HOME/.minikube/client.crt
-                        cp $CLIENT_KEY $HOME/.minikube/client.key
-                        cp $CA_CRT $HOME/.minikube/ca.crt
-        
-                        # Download kubectl binary
-                        curl -LO https://dl.k8s.io/release/v1.33.2/bin/linux/amd64/kubectl
-                        chmod +x kubectl
-                        mv kubectl /usr/local/bin/
-        
-                        # Verify kubectl
-                        kubectl version --client
-        
-                        # Show current context for debug
                         kubectl config current-context
-        
-                        # Test access permissions
-                        kubectl auth can-i get pods
+                        kubectl get nodes
+                        kubectl apply -f your-k8s-deployment.yaml
                     '''
                 }
             }
