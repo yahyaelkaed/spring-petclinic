@@ -87,20 +87,27 @@ pipeline {
 
         stage('Kubernetes Deploy') {
             steps {
-                withCredentials([file(credentialsId: 'minikube-kubeconfig', variable: 'KUBECONFIG_PATH')]) {
+                withCredentials([
+                    file(credentialsId: 'minikube-kubeconfig', variable: 'KUBECONFIG_FILE'),
+                    file(credentialsId: 'client-crt', variable: 'CLIENT_CRT'),
+                    file(credentialsId: 'client-key', variable: 'CLIENT_KEY'),
+                    file(credentialsId: 'ca-crt', variable: 'CA_CRT')
+                ]) {
                     sh '''
-                        curl -LO https://dl.k8s.io/release/v1.33.2/bin/linux/amd64/kubectl
-                        chmod +x kubectl
+                        mkdir -p $HOME/.minikube
+                        mkdir -p $HOME/.kube
         
-                        # Print current context
-                        ./kubectl --kubeconfig=$KUBECONFIG_PATH config current-context
+                        # Copy kubeconfig and certs to home directory or workspace
+                        cp $KUBECONFIG_FILE $HOME/.kube/config
+                        cp $CLIENT_CRT $HOME/.minikube/client.crt
+                        cp $CLIENT_KEY $HOME/.minikube/client.key
+                        cp $CA_CRT $HOME/.minikube/ca.crt
         
-                        # Print user of current context
-                        CURRENT_CONTEXT=$(./kubectl --kubeconfig=$KUBECONFIG_PATH config current-context)
-                        ./kubectl --kubeconfig=$KUBECONFIG_PATH config view -o jsonpath="{.contexts[?(@.name==\\"$CURRENT_CONTEXT\\")].context.user}"
+                        # Optional: Show current context for debug
+                        kubectl config current-context
         
-                        # Test permissions
-                        ./kubectl --kubeconfig=$KUBECONFIG_PATH auth can-i get pods
+                        # Test kubectl access
+                        kubectl auth can-i get pods
                     '''
                 }
             }
