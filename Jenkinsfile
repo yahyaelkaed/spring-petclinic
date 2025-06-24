@@ -86,21 +86,16 @@ pipeline {
         }
 
         stage('Kubernetes Deploy') {
-          steps {
-            withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-              withKubeConfig([credentialsId: 'kubeconfig']) {
-                sh '''
-                  # Download kubectl locally
-                  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                  chmod +x ./kubectl
-        
-                  # Run kubectl using ./kubectl explicitly
-                  ./kubectl version --client
-                  ./kubectl apply -f k8s/ --validate=false
-                '''
-              }
+            steps {
+                withCredentials([file(credentialsId: 'minikube-kubeconfig', variable: 'KUBECONFIG_PATH')]) {
+                    sh '''
+                        curl -LO https://dl.k8s.io/release/v1.33.2/bin/linux/amd64/kubectl
+                        chmod +x kubectl
+                        ./kubectl version --client
+                        ./kubectl --kubeconfig=$KUBECONFIG_PATH apply -f k8s/ --validate=false
+                    '''
+                }
             }
-          }
         }
     }
 
