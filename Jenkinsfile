@@ -100,6 +100,7 @@ pipeline {
                         """
 
                         sh 'kubectl apply -f k8s/service.yaml'
+                        sh 'kubectl apply --validate=false -f k8s/db.yml'
                     }
                 }
             }
