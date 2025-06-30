@@ -2,7 +2,7 @@
 - hosts: all
   become: yes
   vars:
-    kube_version: "1.28.5-1.1"  # Updated version that exists in the repository
+    kube_version: "1.28.5-1.1"  # Verified available version
     pod_network_cidr: "10.244.0.0/16"
     flannel_url: "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
 
@@ -52,14 +52,11 @@
         update_cache: yes
         allow_downgrade: yes
 
-    - name: Hold Kubernetes packages
-      apt:
-        name:
-          - kubelet
-          - kubeadm
-          - kubectl
-        state: present
-        mark_hold: yes
+    - name: Hold Kubernetes packages (fixed method)
+      shell: |
+        apt-mark hold kubelet kubeadm kubectl
+      args:
+        warn: false
 
     - name: Disable swap
       shell: |
