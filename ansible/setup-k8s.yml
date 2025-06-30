@@ -20,7 +20,7 @@
 
     - name: Add Kubernetes repo
       apt_repository:
-        repo: "deb https://apt.kubernetes.io/ kubernetes-{{ ansible_distribution_release | lower }} main"
+        repo: "deb https://apt.kubernetes.io/ kubernetes-xenial main"
         state: present
 
     - name: Install kubeadm, kubelet and kubectl
