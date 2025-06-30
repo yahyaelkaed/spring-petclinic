@@ -18,8 +18,8 @@
     - name: Add Kubernetes GPG key
       shell: curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 
-   - name: Add Kubernetes repo
-     apt_repository:
+    - name: Add Kubernetes repo
+      apt_repository:
       repo: "deb https://apt.kubernetes.io/ kubernetes-{{ ansible_distribution_release | lower }} main"
       state: present
 
