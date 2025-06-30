@@ -2,7 +2,7 @@
 - hosts: all
   become: yes
   vars:
-    kube_version: "1.28.0-00"  # Update to your desired Kubernetes version
+    kube_version: "1.28.5-1.1"  # Updated version that exists in the repository
     pod_network_cidr: "10.244.0.0/16"
     flannel_url: "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
 
@@ -23,19 +23,19 @@
           - software-properties-common
         state: present
 
-    - name: Create keyrings directory if it doesn't exist
+    - name: Create keyrings directory
       file:
         path: /usr/share/keyrings
         state: directory
         mode: '0755'
 
-    - name: Download Kubernetes GPG key (new method)
+    - name: Add Kubernetes GPG key
       shell: |
         curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes-apt-keyring.gpg
       args:
         creates: /usr/share/keyrings/kubernetes-apt-keyring.gpg
 
-    - name: Add Kubernetes APT repository (new URL)
+    - name: Add Kubernetes repository
       apt_repository:
         repo: "deb [signed-by=/usr/share/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /"
         filename: kubernetes.list
@@ -52,7 +52,7 @@
         update_cache: yes
         allow_downgrade: yes
 
-    - name: Hold Kubernetes packages at current version
+    - name: Hold Kubernetes packages
       apt:
         name:
           - kubelet
@@ -94,14 +94,13 @@
       register: kubeadm_init
       failed_when: kubeadm_init.rc != 0 and "already initialized" not in kubeadm_init.stderr
 
-    - name: Set up kubeconfig for root user
+    - name: Set up kubeconfig
       block:
         - name: Create .kube directory
           file:
             path: /root/.kube
             state: directory
             mode: '0700'
-
         - name: Copy admin config
           copy:
             remote_src: yes
@@ -112,7 +111,7 @@
             mode: '0600'
       when: kubeadm_init.rc == 0
 
-    - name: Install Pod network (Flannel)
+    - name: Install Flannel CNI
       command: kubectl apply -f {{ flannel_url }}
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
@@ -128,6 +127,6 @@
 - hosts: minikube-worker
   become: yes
   tasks:
-    - name: Join Kubernetes cluster
+    - name: Join cluster
       command: /bin/bash /tmp/join-command.sh
       when: hostvars['minikube-master']['kubeadm_init'] is defined
