@@ -16,7 +16,7 @@
         state: present
 
     - name: Add Kubernetes GPG key
-      command: curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+      shell: curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 
     - name: Add Kubernetes repo
       apt_repository:
