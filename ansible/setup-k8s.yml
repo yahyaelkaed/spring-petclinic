@@ -2,11 +2,11 @@
   become: yes
   tasks:
     - name: Update apt
-      apt:
+      ansible.builtin.apt:
         update_cache: yes
 
     - name: Install dependencies
-      apt:
+      ansible.builtin.apt:
         name:
           - apt-transport-https
           - ca-certificates
@@ -24,11 +24,11 @@
     - name: Add Kubernetes APT repository
       ansible.builtin.apt_repository:
         repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main"
-        filename: kubernetes.list
+        filename: kubernetes
         state: present
 
     - name: Install kubeadm, kubelet and kubectl
-      apt:
+      ansible.builtin.apt:
         name:
           - kubelet
           - kubeadm
@@ -37,7 +37,7 @@
         update_cache: yes
 
     - name: Hold Kubernetes packages at current version
-      apt:
+      ansible.builtin.apt:
         name:
           - kubelet
           - kubeadm
@@ -51,19 +51,19 @@
   become: yes
   tasks:
     - name: Initialize Kubernetes master node
-      command: kubeadm init --pod-network-cidr=10.244.0.0/16
+      ansible.builtin.command: kubeadm init --pod-network-cidr=10.244.0.0/16
       register: kubeadm_init
       failed_when: kubeadm_init.rc != 0 and "already initialized" not in kubeadm_init.stderr
 
     - name: Set up kube config for root user
-      shell: |
+      ansible.builtin.shell: |
         mkdir -p /root/.kube
         cp /etc/kubernetes/admin.conf /root/.kube/config
         chown root:root /root/.kube/config
       when: kubeadm_init.rc == 0
 
     - name: Install Flannel network plugin
-      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      ansible.builtin.command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
       when: kubeadm_init.rc == 0
@@ -72,5 +72,5 @@
   become: yes
   tasks:
     - name: Join Kubernetes cluster
-      command: "{{ hostvars['minikube-master']['kubeadm_init'].stdout_lines[-1] }}"
+      ansible.builtin.command: "{{ hostvars['minikube-master']['kubeadm_init'].stdout_lines[-1] }}"
       when: hostvars['minikube-master']['kubeadm_init'] is defined
