@@ -37,7 +37,7 @@
 
     - name: Add Kubernetes APT repository
       ansible.builtin.apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg arch=amd64] https://apt.kubernetes.io/ kubernetes-{{ ansible_distribution_release }} main"
+        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes main"
         filename: kubernetes.list
         state: present
         update_cache: yes
