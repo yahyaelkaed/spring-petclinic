@@ -84,6 +84,14 @@ pipeline {
                 }
             }
         }
+        stage('Setup Kubernetes Cluster with Ansible') {
+            steps {
+                script {
+                    // Run Ansible playbook to create cluster
+                    sh 'ansible-playbook -i ansible/inventory.ini ansible/setup-k8s.yml'
+                }
+            }
+        }
 
         stage('Kubernetes Deploy') {
             steps {
