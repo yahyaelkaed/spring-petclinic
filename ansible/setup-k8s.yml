@@ -1,0 +1,71 @@
+- hosts: all
+  become: yes
+  tasks:
+    - name: Update apt
+      apt:
+        update_cache: yes
+
+    - name: Install dependencies
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Add Kubernetes GPG key
+      command: curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+
+    - name: Add Kubernetes repo
+      apt_repository:
+        repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+
+    - name: Install kubeadm, kubelet and kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        update_cache: yes
+
+    - name: Hold Kubernetes packages at current version
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        update_cache: yes
+        allow_downgrade: yes
+        mark_hold: yes
+
+- hosts: minikube-master
+  become: yes
+  tasks:
+    - name: Initialize Kubernetes master node
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16
+      register: kubeadm_init
+      failed_when: kubeadm_init.rc != 0 and "already initialized" not in kubeadm_init.stderr
+
+    - name: Set up kube config for root user
+      shell: |
+        mkdir -p /root/.kube
+        cp /etc/kubernetes/admin.conf /root/.kube/config
+        chown root:root /root/.kube/config
+      when: kubeadm_init.rc == 0
+
+    - name: Install Flannel network plugin
+      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: kubeadm_init.rc == 0
+
+- hosts: minikube-worker
+  become: yes
+  tasks:
+    - name: Join Kubernetes cluster
+      command: "{{ hostvars['minikube-master']['kubeadm_init'].stdout_lines[-1] }}"
+      when: hostvars['minikube-master']['kubeadm_init'] is defined
