@@ -1,19 +1,33 @@
+---
 - hosts: all
   become: yes
-  tasks:
-    - name: Update apt
-      ansible.builtin.apt:
-        update_cache: yes
+  vars:
+    kube_version: "1.28.0-00"  # Update to your desired Kubernetes version
+    pod_network_cidr: "10.244.0.0/16"
+    flannel_url: "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
 
-    - name: Install dependencies
-      ansible.builtin.apt:
+  tasks:
+    - name: Update apt package index
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required system packages
+      apt:
         name:
           - apt-transport-https
           - ca-certificates
           - curl
           - gnupg
           - lsb-release
+          - software-properties-common
         state: present
+
+    - name: Create keyrings directory if it doesn't exist
+      file:
+        path: /usr/share/keyrings
+        state: directory
+        mode: '0755'
 
     - name: Download Kubernetes GPG key
       ansible.builtin.get_url:
@@ -23,54 +37,97 @@
 
     - name: Add Kubernetes APT repository
       ansible.builtin.apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main"
-        filename: kubernetes
-        state: present
-
-    - name: Install kubeadm, kubelet and kubectl
-      ansible.builtin.apt:
-        name:
-          - kubelet
-          - kubeadm
-          - kubectl
+        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg arch=amd64] https://apt.kubernetes.io/ kubernetes-{{ ansible_distribution_release }} main"
+        filename: kubernetes.list
         state: present
         update_cache: yes
 
-    - name: Hold Kubernetes packages at current version
-      ansible.builtin.apt:
+    - name: Install Kubernetes components
+      apt:
         name:
-          - kubelet
-          - kubeadm
-          - kubectl
+          - kubelet={{ kube_version }}
+          - kubeadm={{ kube_version }}
+          - kubectl={{ kube_version }}
         state: present
         update_cache: yes
         allow_downgrade: yes
+
+    - name: Hold Kubernetes packages at current version
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
         mark_hold: yes
+
+    - name: Disable swap
+      shell: |
+        swapoff -a
+        sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+      args:
+        warn: false
+
+    - name: Enable kernel modules
+      modprobe:
+        name:
+          - br_netfilter
+          - overlay
+        state: present
+
+    - name: Configure sysctl
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      with_dict:
+        net.bridge.bridge-nf-call-ip6tables: 1
+        net.bridge.bridge-nf-call-iptables: 1
+        net.ipv4.ip_forward: 1
 
 - hosts: minikube-master
   become: yes
   tasks:
-    - name: Initialize Kubernetes master node
-      ansible.builtin.command: kubeadm init --pod-network-cidr=10.244.0.0/16
+    - name: Initialize Kubernetes cluster
+      command: kubeadm init --pod-network-cidr={{ pod_network_cidr }} --ignore-preflight-errors=Swap
       register: kubeadm_init
       failed_when: kubeadm_init.rc != 0 and "already initialized" not in kubeadm_init.stderr
 
-    - name: Set up kube config for root user
-      ansible.builtin.shell: |
-        mkdir -p /root/.kube
-        cp /etc/kubernetes/admin.conf /root/.kube/config
-        chown root:root /root/.kube/config
+    - name: Set up kubeconfig for root user
+      block:
+        - name: Create .kube directory
+          file:
+            path: /root/.kube
+            state: directory
+            mode: '0700'
+
+        - name: Copy admin config
+          copy:
+            remote_src: yes
+            src: /etc/kubernetes/admin.conf
+            dest: /root/.kube/config
+            owner: root
+            group: root
+            mode: '0600'
       when: kubeadm_init.rc == 0
 
-    - name: Install Flannel network plugin
-      ansible.builtin.command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+    - name: Install Pod network (Flannel)
+      command: kubectl apply -f {{ flannel_url }}
       environment:
         KUBECONFIG: /etc/kubernetes/admin.conf
+      when: kubeadm_init.rc == 0
+
+    - name: Save join command
+      copy:
+        content: "{{ hostvars['minikube-master']['kubeadm_init'].stdout_lines[-1] }}"
+        dest: /tmp/join-command.sh
+        mode: '0755'
       when: kubeadm_init.rc == 0
 
 - hosts: minikube-worker
   become: yes
   tasks:
     - name: Join Kubernetes cluster
-      ansible.builtin.command: "{{ hostvars['minikube-master']['kubeadm_init'].stdout_lines[-1] }}"
+      command: /bin/bash /tmp/join-command.sh
       when: hostvars['minikube-master']['kubeadm_init'] is defined
