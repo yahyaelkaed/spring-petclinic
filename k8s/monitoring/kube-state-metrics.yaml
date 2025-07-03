@@ -1,8 +1,3 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: monitoring
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,11 +16,14 @@ spec:
         app: kube-state-metrics
     spec:
       containers:
-      - name: kube-state-metrics
-        image: quay.io/coreos/kube-state-metrics:v2.10.1
-        ports:
-        - containerPort: 8080
-        - containerPort: 8081
+        - name: kube-state-metrics
+          image: quay.io/coreos/kube-state-metrics:v2.10.1
+          ports:
+            - name: http-metrics
+              containerPort: 8080
+            - name: telemetry
+              containerPort: 8081
+
 ---
 apiVersion: v1
 kind: Service
@@ -38,6 +36,6 @@ spec:
   selector:
     app: kube-state-metrics
   ports:
-  - name: http-metrics
-    port: 8080
-    targetPort: 8080
+    - name: http-metrics
+      port: 8080
+      targetPort: 8080
