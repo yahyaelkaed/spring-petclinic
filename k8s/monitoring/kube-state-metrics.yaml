@@ -43,14 +43,19 @@ kind: Deployment
 metadata:
   name: kube-state-metrics
   namespace: monitoring
+  labels:
+    app: kube-state-metrics
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: kube-state-metrics  # Must match template.metadata.labels
   template:
     metadata:
       labels:
-        app: kube-state-metrics
+        app: kube-state-metrics  # Matches selector
     spec:
-      hostNetwork: true  # Critical for local clusters
+      hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: kube-state-metrics
       containers:
@@ -58,9 +63,9 @@ spec:
         image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.10.1
         env:
         - name: KUBERNETES_SERVICE_HOST
-          value: "127.0.0.1"  # Direct connection
+          value: "127.0.0.1"  # For Docker Desktop/Minikube
         - name: KUBERNETES_SERVICE_PORT
-          value: "49886"  # MUST match your `kubectl cluster-info` port
+          value: "49886"  # From your kubectl cluster-info
         ports:
         - containerPort: 8080
         resources:
@@ -70,19 +75,18 @@ spec:
           httpGet:
             path: /healthz
             port: 8080
-          initialDelaySeconds: 30  # Increased for slow starts
+          initialDelaySeconds: 30
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kube-state-metrics
   namespace: monitoring
-  labels:
-    app: kube-state-metrics
 spec:
   selector:
     app: kube-state-metrics
   ports:
-    - name: http-metrics
-      port: 8080
-      targetPort: 8080
+  - name: http-metrics
+    port: 8080
+    targetPort: 8080
