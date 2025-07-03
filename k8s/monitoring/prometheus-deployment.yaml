@@ -9,6 +9,7 @@ data:
   prometheus.yml: |
     global:
       scrape_interval: 15s
+      scrape_timeout: 10s
 
     scrape_configs:
       - job_name: 'prometheus'
@@ -16,8 +17,17 @@ data:
           - targets: ['localhost:9090']
 
       - job_name: 'kube-state-metrics'
-        static_configs:
-          - targets: ['kube-state-metrics.monitoring.svc.cluster.local:8080']
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names: ["monitoring"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_label_app]
+            action: keep
+            regex: kube-state-metrics
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http-metrics
 
       - job_name: 'kubelets'
         scheme: https
@@ -66,12 +76,19 @@ spec:
     spec:
       containers:
       - name: prometheus
-        image: prom/prometheus
+        image: prom/prometheus:v2.47.0
         ports:
         - containerPort: 9090
         volumeMounts:
         - name: config-volume
           mountPath: /etc/prometheus/
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 500Mi
       volumes:
       - name: config-volume
         configMap:
