@@ -8,8 +8,8 @@ kind: Deployment
 metadata:
   name: kube-state-metrics
   namespace: monitoring
-labels:
-  app: kube-state-metrics
+  labels:
+    app: kube-state-metrics
 spec:
   replicas: 1
   selector:
@@ -32,12 +32,12 @@ kind: Service
 metadata:
   name: kube-state-metrics
   namespace: monitoring
-labels:
-  app: kube-state-metrics
+  labels:
+    app: kube-state-metrics
 spec:
+  selector:
+    app: kube-state-metrics
   ports:
   - name: http-metrics
     port: 8080
     targetPort: 8080
-  selector:
-    app: kube-state-metrics
