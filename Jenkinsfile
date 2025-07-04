@@ -118,39 +118,33 @@ pipeline {
         stage('Setup Monitoring') {
             steps {
                 script {
-                    // 1. First fix metrics-server (3 essential commands)
-                    sh '''
-                        kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-                        kubectl patch deployment metrics-server -n kube-system -p '{"spec":{"template":{"spec":{"containers":[{"name":"metrics-server","args":["--kubelet-insecure-tls","--kubelet-preferred-address-types=InternalIP"]}]}}}}'
-                        kubectl rollout restart deployment metrics-server -n kube-system
-                        sleep 60  # Wait for metrics-server to restart
-                    '''
-                    
-                    // 2. Then setup monitoring (your existing code)
+                    // 1. Skip metrics-server and setup monitoring directly
                     sh '''
                         kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-                        helm repo update prometheus-community
+                        
+                        # Add stable repo if needed
+                        helm repo add stable https://charts.helm.sh/stable || true
+                        helm repo update
+                        
+                        # Install with metrics-server completely disabled
                         helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
                             --namespace monitoring \
                             --set grafana.adminPassword=admin \
                             --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
                             --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true \
-                            --set kubelet.serviceMonitor.https=false \
-                            --set prometheus.prometheusSpec.evaluationInterval=5m \
-                            --set prometheus.prometheusSpec.scrapeInterval=5m \
-                            --set prometheus.prometheusSpec.resources.requests.cpu=200m \
-                            --set prometheus.prometheusSpec.resources.requests.memory=400Mi \
-                            --set prometheus.prometheusSpec.resources.limits.cpu=500m \
-                            --set prometheus.prometheusSpec.resources.limits.memory=1Gi \
-                            --set grafana.resources.requests.cpu=100m \
-                            --set grafana.resources.requests.memory=256Mi \
-                            --set alertmanager.enabled=false \
+                            --set kubelet.serviceMonitor.enabled=false \  # Disable kubelet metrics
                             --set kube-state-metrics.enabled=false \
-                            --set nodeExporter.enabled=false
+                            --set nodeExporter.enabled=false \
+                            --set prometheus.prometheusSpec.evaluationInterval=5m \
+                            --set prometheus.prometheusSpec.scrapeInterval=5m
                     '''
                     
-                    // 3. Verify it worked
-                    sh 'kubectl top nodes || echo "Metrics may take 1-2 minutes to appear"'
+                    // 2. Add a health check that doesn't depend on metrics
+                    sh '''
+                        kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
+                        echo "Monitoring installed successfully!"
+                        echo "Access Grafana with: kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80"
+                    '''
                 }
             }
         }
