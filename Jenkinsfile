@@ -5,7 +5,7 @@ pipeline {
         MAVEN_HOME = tool 'maven-3.8.6'
         PATH = "${MAVEN_HOME}/bin:${PATH}"
         DOCKER_IMAGE = "yahyaelkaed/petclinic:${BUILD_NUMBER}"
-        HELM_VERSION = "3.12.0"
+        HELM_PATH = "C:\\Program Files\\helm\\helm.exe"
         MAVEN_OPTS = "-Xmx1024m -XX:MaxRAMPercentage=50.0"
         JAVA_OPTS = "-Xmx768m"
     }
@@ -116,48 +116,32 @@ pipeline {
                 }
             }
         }
-
-        stage('Install Helm') {
-            steps {
-                script {
-                    // Install Helm if not present
-                    sh '''
-                    if ! command -v helm &> /dev/null; then
-                        echo "Installing Helm ${HELM_VERSION}..."
-                        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-                        chmod 700 get_helm.sh
-                        ./get_helm.sh --version v${HELM_VERSION}
-                    fi
-                    helm version
-                    '''
-                }
-            }
-        }
-
+        
         stage('Setup Monitoring') {
             steps {
                 script {
-                    sh '''
-                    kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-                    
-                    helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
-                        --namespace monitoring \
-                        --set grafana.adminPassword=admin \
-                        --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
-                        --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true \
-                        --set kubelet.serviceMonitor.https=false \
-                        --set prometheus.prometheusSpec.evaluationInterval=5m \
-                        --set prometheus.prometheusSpec.scrapeInterval=5m \
-                        --set prometheus.prometheusSpec.resources.requests.cpu=200m \
-                        --set prometheus.prometheusSpec.resources.requests.memory=400Mi \
-                        --set prometheus.prometheusSpec.resources.limits.cpu=500m \
-                        --set prometheus.prometheusSpec.resources.limits.memory=1Gi \
-                        --set grafana.resources.requests.cpu=100m \
-                        --set grafana.resources.requests.memory=256Mi \
-                        --set alertmanager.enabled=false \
-                        --set kube-state-metrics.enabled=false \
-                        --set nodeExporter.enabled=false
-                    '''
+                    bat """
+                        kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+                        
+                        %HELM_PATH% repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                        %HELM_PATH% upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack ^
+                            --namespace monitoring ^
+                            --set grafana.adminPassword=admin ^
+                            --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false ^
+                            --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true ^
+                            --set kubelet.serviceMonitor.https=false ^
+                            --set prometheus.prometheusSpec.evaluationInterval=5m ^
+                            --set prometheus.prometheusSpec.scrapeInterval=5m ^
+                            --set prometheus.prometheusSpec.resources.requests.cpu=200m ^
+                            --set prometheus.prometheusSpec.resources.requests.memory=400Mi ^
+                            --set prometheus.prometheusSpec.resources.limits.cpu=500m ^
+                            --set prometheus.prometheusSpec.resources.limits.memory=1Gi ^
+                            --set grafana.resources.requests.cpu=100m ^
+                            --set grafana.resources.requests.memory=256Mi ^
+                            --set alertmanager.enabled=false ^
+                            --set kube-state-metrics.enabled=false ^
+                            --set nodeExporter.enabled=false
+                    """
                 }
             }
         }
@@ -165,14 +149,14 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
-                    sh '''
-                    kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
-                    echo "=== MONITORING ACCESS ==="
-                    echo "1. Run port-forwarding:"
-                    echo "kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80"
-                    echo "2. Access Grafana at http://localhost:3000"
-                    echo "3. Credentials: admin/admin"
-                    '''
+                    bat """
+                        kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
+                        echo === MONITORING ACCESS ===
+                        echo 1. Run port-forwarding:
+                        echo kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80
+                        echo 2. Access Grafana at http://localhost:3000
+                        echo 3. Credentials: admin/admin
+                    """
                 }
             }
         }
