@@ -6,7 +6,6 @@ pipeline {
         PATH = "${MAVEN_HOME}/bin:${PATH}"
         DOCKER_IMAGE = "yahyaelkaed/petclinic:${BUILD_NUMBER}"
         HELM_VERSION = "3.12.0"
-        // Resource optimization
         MAVEN_OPTS = "-Xmx1024m -XX:MaxRAMPercentage=50.0"
         JAVA_OPTS = "-Xmx768m"
     }
@@ -105,10 +104,17 @@ pipeline {
                             mkdir -p $HOME/.kube
                             cp $KUBECONFIG_FILE $HOME/.kube/config
                         '''
-                        // Add resource limits to deployment
+                        // Fixed sed command
                         sh """
-                            sed -e 's|image: petclinic:\${BUILD_NUMBER}|image: yahyaelkaed/petclinic:${BUILD_NUMBER}|' \
-                               -e '/spec:/a \      resources: \n        limits: \n          cpu: "500m" \n          memory: "512Mi" \n        requests: \n          cpu: "200m" \n          memory: "256Mi"' \
+                            sed -e 's|image: petclinic:\\${BUILD_NUMBER}|image: yahyaelkaed/petclinic:${BUILD_NUMBER}|' \\
+                               -e '/spec:/a\\ 
+      resources: \\
+        limits: \\
+          cpu: \"500m\" \\
+          memory: \"512Mi\" \\
+        requests: \\
+          cpu: \"200m\" \\
+          memory: \"256Mi\"' \\
                                k8s/deployment.yaml > k8s/deployment-fixed.yaml
                             kubectl apply --validate=false -f k8s/deployment-fixed.yaml
                         """
@@ -134,7 +140,6 @@ pipeline {
         stage('Setup Monitoring') {
             steps {
                 script {
-                    // Lightweight monitoring installation
                     sh '''
                     kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
                     
