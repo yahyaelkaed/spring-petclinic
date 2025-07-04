@@ -118,7 +118,6 @@ pipeline {
         stage('Setup Monitoring') {
             steps {
                 script {
-                    // 1. Skip metrics-server and setup monitoring directly
                     sh '''
                         kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
                         
@@ -132,14 +131,13 @@ pipeline {
                             --set grafana.adminPassword=admin \
                             --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
                             --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true \
-                            --set kubelet.serviceMonitor.enabled=false \  # Disable kubelet metrics
+                            --set kubelet.serviceMonitor.enabled=false \
                             --set kube-state-metrics.enabled=false \
                             --set nodeExporter.enabled=false \
                             --set prometheus.prometheusSpec.evaluationInterval=5m \
                             --set prometheus.prometheusSpec.scrapeInterval=5m
                     '''
                     
-                    // 2. Add a health check that doesn't depend on metrics
                     sh '''
                         kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
                         echo "Monitoring installed successfully!"
