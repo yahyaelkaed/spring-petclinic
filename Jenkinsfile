@@ -129,6 +129,20 @@ pipeline {
                 }
             }
         }
+        stage('Enable Metrics Server') {
+            steps {
+                script {
+                    // Enable and wait for metrics-server
+                    sh '''
+                    minikube addons enable metrics-server
+                    kubectl wait --namespace kube-system \
+                      --for=condition=ready pod \
+                      --selector=k8s-app=metrics-server \
+                      --timeout=300s
+                    '''
+                }
+            }
+        }
 
         stage('Setup Monitoring Stack') {
             steps {
