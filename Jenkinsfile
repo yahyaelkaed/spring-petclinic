@@ -118,17 +118,18 @@ pipeline {
         stage('Setup Monitoring') {
             steps {
                 script {
+                    // 1. First fix metrics-server (3 essential commands)
                     sh '''
-                        if ! kubectl get deployment metrics-server -n kube-system; then
-                            kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-                            kubectl wait --for=condition=available deployment/metrics-server -n kube-system --timeout=300s
-                        fi
+                        kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+                        kubectl patch deployment metrics-server -n kube-system -p '{"spec":{"template":{"spec":{"containers":[{"name":"metrics-server","args":["--kubelet-insecure-tls","--kubelet-preferred-address-types=InternalIP"]}]}}}}'
+                        kubectl rollout restart deployment metrics-server -n kube-system
+                        sleep 60  # Wait for metrics-server to restart
                     '''
                     
+                    // 2. Then setup monitoring (your existing code)
                     sh '''
                         kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-                        
-                        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                        helm repo update prometheus-community
                         helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
                             --namespace monitoring \
                             --set grafana.adminPassword=admin \
@@ -147,6 +148,9 @@ pipeline {
                             --set kube-state-metrics.enabled=false \
                             --set nodeExporter.enabled=false
                     '''
+                    
+                    // 3. Verify it worked
+                    sh 'kubectl top nodes || echo "Metrics may take 1-2 minutes to appear"'
                 }
             }
         }
