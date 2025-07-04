@@ -1,0 +1,39 @@
+name: Deploy Monitoring Stack
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'monitoring/**' ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubectl & Helm
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          sudo install kubectl /usr/local/bin/kubectl
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Start Minikube (if needed)
+        run: |
+          minikube start
+          minikube addons enable metrics-server
+
+      - name: Deploy Monitoring Stack
+        run: |
+          kubectl apply -f monitoring/namespace.yaml
+          kubectl apply -f monitoring/grafana-dashboards.yaml
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --set grafana.adminPassword=admin \
+            --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
+
+      - name: Verify Deployment
+        run: |
+          kubectl get pods -n monitoring
+          echo "Grafana URL: http://localhost:3000"
+          echo "Username: admin"
+          echo "Password: $(kubectl get secret -n monitoring grafana -o jsonpath='{.data.admin-password}' | base64 --decode)"
