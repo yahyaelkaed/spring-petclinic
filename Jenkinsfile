@@ -6,6 +6,9 @@ pipeline {
         PATH = "${MAVEN_HOME}/bin:${PATH}"
         DOCKER_IMAGE = "yahyaelkaed/petclinic:${BUILD_NUMBER}"
         HELM_VERSION = "3.12.0"
+        // Resource optimization
+        MAVEN_OPTS = "-Xmx1024m -XX:MaxRAMPercentage=50.0"
+        JAVA_OPTS = "-Xmx768m"
     }
 
     stages {
@@ -19,7 +22,7 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'mvn clean package -Dcheckstyle.skip=true -Dnohttp-checkstyle.skip=true'
+                sh 'mvn clean package -Dcheckstyle.skip=true -Dnohttp-checkstyle.skip=true -T 1C'
                 sh '''
                     JAR_FILE=$(ls target/*.jar | head -1)
                     if [ -z "$JAR_FILE" ]; then
@@ -85,6 +88,7 @@ pipeline {
                 }
             }
         }
+
         stage('Setup Kubernetes Cluster with Ansible') {
             steps {
                 sshagent(['minikube-ssh-key']) {
@@ -101,46 +105,40 @@ pipeline {
                             mkdir -p $HOME/.kube
                             cp $KUBECONFIG_FILE $HOME/.kube/config
                         '''
-                        // Replace image tag in deployment file and apply it
+                        // Add resource limits to deployment
                         sh """
-                            sed 's|image: petclinic:\${BUILD_NUMBER}|image: yahyaelkaed/petclinic:${BUILD_NUMBER}|' k8s/deployment.yaml > k8s/deployment-fixed.yaml
+                            sed -e 's|image: petclinic:\${BUILD_NUMBER}|image: yahyaelkaed/petclinic:${BUILD_NUMBER}|' \
+                               -e '/spec:/a \      resources: \n        limits: \n          cpu: "500m" \n          memory: "512Mi" \n        requests: \n          cpu: "200m" \n          memory: "256Mi"' \
+                               k8s/deployment.yaml > k8s/deployment-fixed.yaml
                             kubectl apply --validate=false -f k8s/deployment-fixed.yaml
                         """
-
                         sh 'kubectl apply -f k8s/service.yaml'
                         sh 'kubectl apply --validate=false -f k8s/db.yml'
                     }
                 }
             }
         }
+
         stage('Install Helm') {
             steps {
                 script {
-                    // Install Helm if not present
                     sh '''
-                    if ! command -v helm &> /dev/null; then
-                        echo "Installing Helm ${HELM_VERSION}..."
-                        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-                        chmod 700 get_helm.sh
-                        ./get_helm.sh --version v${HELM_VERSION}
-                    fi
-                    helm version
+                    curl -sSLO https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+                    chmod 700 get_helm.sh
+                    ./get_helm.sh --version v${HELM_VERSION} --no-sudo
                     '''
                 }
             }
         }
-        stage('Setup Guaranteed Monitoring') {
+
+        stage('Setup Monitoring') {
             steps {
                 script {
-                    // 1. Create monitoring namespace
-                    sh 'kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -'
-                    
-                    // 2. Install foolproof monitoring stack
+                    // Lightweight monitoring installation
                     sh '''
-                    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-                    helm repo update
+                    kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
                     
-                    helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+                    helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
                         --namespace monitoring \
                         --set grafana.adminPassword=admin \
                         --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
@@ -148,41 +146,40 @@ pipeline {
                         --set kubelet.serviceMonitor.https=false \
                         --set prometheus.prometheusSpec.evaluationInterval=5m \
                         --set prometheus.prometheusSpec.scrapeInterval=5m \
-                        --set prometheus.prometheusSpec.scrapeTimeout=30s \
-                        --set prometheus.prometheusSpec.containers[0].resources.requests.memory=512Mi \
+                        --set prometheus.prometheusSpec.resources.requests.cpu=200m \
+                        --set prometheus.prometheusSpec.resources.requests.memory=400Mi \
+                        --set prometheus.prometheusSpec.resources.limits.cpu=500m \
+                        --set prometheus.prometheusSpec.resources.limits.memory=1Gi \
+                        --set grafana.resources.requests.cpu=100m \
+                        --set grafana.resources.requests.memory=256Mi \
                         --set alertmanager.enabled=false \
                         --set kube-state-metrics.enabled=false \
                         --set nodeExporter.enabled=false
                     '''
-                    
-                    // 3. Apply minimal dashboard
-                    sh 'kubectl apply -f https://raw.githubusercontent.com/grafana/grafana/main/deploy/kubernetes/grafana-dashboard-configmap.yaml -n monitoring'
                 }
             }
         }
-        
-        stage('Access Monitoring') {
+
+        stage('Verify Deployment') {
             steps {
                 script {
-                    // 4. Get access information
                     sh '''
+                    kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
                     echo "=== MONITORING ACCESS ==="
-                    echo "Grafana URL: http://localhost:3000"
-                    echo "Username: admin"
-                    echo "Password: admin"
-                    echo "=== PORT FORWARDING ==="
-                    echo "Run this command on your local machine:"
-                    echo "kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80"
+                    echo "1. Run port-forwarding:"
+                    echo "kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80"
+                    echo "2. Access Grafana at http://localhost:3000"
+                    echo "3. Credentials: admin/admin"
                     '''
                 }
             }
         }
     }
-    
 
     post {
         always {
             archiveArtifacts 'target/*.jar'
+            sh 'docker system prune -f --filter "until=24h"'
             cleanWs()
             sh 'pkill -f "kubectl port-forward" || true'
         }
