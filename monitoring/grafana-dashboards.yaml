@@ -6,7 +6,15 @@ metadata:
   labels:
     grafana_dashboard: "1"
 data:
-  kubernetes-cluster.json: |-
-    {"title": "K8s Cluster", "uid": "k8s-cluster", ...}  # (Paste from https://grafana.com/grafana/dashboards/315)
+  kubernetes.json: |-
+    {
+      "title": "Kubernetes",
+      "uid": "k8s-dash",
+      "json": $(curl -sL https://grafana.com/api/dashboards/315/revisions/3/download | jq -c)
+    }
   jenkins.json: |-
-    {"title": "Jenkins", "uid": "jenkins", ...}  # (Paste from https://grafana.com/grafana/dashboards/9964)
+    {
+      "title": "Jenkins",
+      "uid": "jenkins-dash",
+      "json": $(curl -sL https://grafana.com/api/dashboards/9964/revisions/3/download | jq -c)
+    }
