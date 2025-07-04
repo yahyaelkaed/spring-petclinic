@@ -104,20 +104,12 @@ pipeline {
                             mkdir -p $HOME/.kube
                             cp $KUBECONFIG_FILE $HOME/.kube/config
                         '''
-                        // Fixed sed command
+                        // Replace image tag in deployment file and apply it
                         sh """
-                            sed -e 's|image: petclinic:\\${BUILD_NUMBER}|image: yahyaelkaed/petclinic:${BUILD_NUMBER}|' \\
-                               -e '/spec:/a\\ 
-      resources: \\
-        limits: \\
-          cpu: \"500m\" \\
-          memory: \"512Mi\" \\
-        requests: \\
-          cpu: \"200m\" \\
-          memory: \"256Mi\"' \\
-                               k8s/deployment.yaml > k8s/deployment-fixed.yaml
+                            sed 's|image: petclinic:\${BUILD_NUMBER}|image: yahyaelkaed/petclinic:${BUILD_NUMBER}|' k8s/deployment.yaml > k8s/deployment-fixed.yaml
                             kubectl apply --validate=false -f k8s/deployment-fixed.yaml
                         """
+
                         sh 'kubectl apply -f k8s/service.yaml'
                         sh 'kubectl apply --validate=false -f k8s/db.yml'
                     }
