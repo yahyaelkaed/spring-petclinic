@@ -120,10 +120,15 @@ pipeline {
         stage('Install Helm') {
             steps {
                 script {
+                    // Install Helm if not present
                     sh '''
-                    curl -sSLO https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-                    chmod 700 get_helm.sh
-                    ./get_helm.sh --version v${HELM_VERSION} --no-sudo
+                    if ! command -v helm &> /dev/null; then
+                        echo "Installing Helm ${HELM_VERSION}..."
+                        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+                        chmod 700 get_helm.sh
+                        ./get_helm.sh --version v${HELM_VERSION}
+                    fi
+                    helm version
                     '''
                 }
             }
