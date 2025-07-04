@@ -117,34 +117,42 @@ sh 'kubectl apply --validate=false -f k8s/db.yml'
 }
 }
 stage('Setup Monitoring') {
-            steps {
-                script {
-                    sh """
-                        kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-                        
-                        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-                        helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
-                            --namespace monitoring \
-                            --set grafana.adminPassword=admin \
-                            --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
-                            --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true \
-                            --set kubelet.serviceMonitor.https=false \
-                            --set prometheus.prometheusSpec.evaluationInterval=5m \
-                            --set prometheus.prometheusSpec.scrapeInterval=5m \
-                            --set prometheus.prometheusSpec.resources.requests.cpu=200m \
-                            --set prometheus.prometheusSpec.resources.requests.memory=400Mi \
-                            --set prometheus.prometheusSpec.resources.limits.cpu=500m \
-                            --set prometheus.prometheusSpec.resources.limits.memory=1Gi \
-                            --set grafana.resources.requests.cpu=100m \
-                            --set grafana.resources.requests.memory=256Mi \
-                            --set alertmanager.enabled=false \
-                            --set kube-state-metrics.enabled=false \
-                            --set nodeExporter.enabled=false
-                    """
-                }
-            }
+    steps {
+        script {
+            // Install metrics-server if not present
+            sh '''
+                if ! kubectl get deployment metrics-server -n kube-system; then
+                    kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+                    kubectl wait --for=condition=available deployment/metrics-server -n kube-system --timeout=300s
+                fi
+            '''
+            
+            // Proceed with monitoring setup
+            sh '''
+                kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+                
+                helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
+                    --namespace monitoring \
+                    --set grafana.adminPassword=admin \
+                    --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+                    --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true \
+                    --set kubelet.serviceMonitor.https=false \
+                    --set prometheus.prometheusSpec.evaluationInterval=5m \
+                    --set prometheus.prometheusSpec.scrapeInterval=5m \
+                    --set prometheus.prometheusSpec.resources.requests.cpu=200m \
+                    --set prometheus.prometheusSpec.resources.requests.memory=400Mi \
+                    --set prometheus.prometheusSpec.resources.limits.cpu=500m \
+                    --set prometheus.prometheusSpec.resources.limits.memory=1Gi \
+                    --set grafana.resources.requests.cpu=100m \
+                    --set grafana.resources.requests.memory=256Mi \
+                    --set alertmanager.enabled=false \
+                    --set kube-state-metrics.enabled=false \
+                    --set nodeExporter.enabled=false
+            '''
         }
-
+    }
+}
         stage('Verify Deployment') {
             steps {
                 script {
