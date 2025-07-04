@@ -115,14 +115,43 @@ pipeline {
         stage('Setup Monitoring Stack') {
             steps {
                 script {
-                    // Deploy monitoring stack using Helm or kubectl
+                    // Create monitoring namespace
                     sh 'kubectl apply -f monitoring/namespace.yaml'
-                    sh 'helm install prometheus prometheus-community/kube-prometheus-stack -n monitoring'
                     
-                    // Alternatively, you can use kubectl with your own manifests
-                    // sh 'kubectl apply -f monitoring/prometheus/'
-                    // sh 'kubectl apply -f monitoring/grafana/'
-                    // sh 'kubectl apply -f monitoring/alertmanager/'
+                    // Install Helm chart with ALL required configurations
+                    sh '''
+                    helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+                      --namespace monitoring \
+                      --set grafana.adminPassword=admin \
+                      --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+                      --set grafana.sidecar.dashboards.enabled=true \
+                      --set grafana.sidecar.dashboards.label=grafana_dashboard \
+                      --set alertmanager.enabled=true
+                    '''
+                    
+                    // Apply Grafana dashboards and Jenkins monitoring
+                    sh 'kubectl apply -f monitoring/grafana-dashboards.yaml'
+                    sh 'kubectl apply -f monitoring/jenkins-service-monitor.yaml'
+                }
+            }
+        }
+        stage('Verify Monitoring') {
+            steps {
+                script {
+                    // Wait for components to be ready
+                    sh 'kubectl wait --for=condition=available -n monitoring deployment/prometheus-operator --timeout=300s'
+                    sh 'kubectl wait --for=condition=ready -n monitoring pod -l app.kubernetes.io/name=grafana --timeout=300s'
+                    
+                    // Print access information
+                    sh '''
+                    echo "=== MONITORING URLs ==="
+                    echo "Grafana:     http://localhost:3000 (admin/$(kubectl get secret -n monitoring prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 --decode))"
+                    echo "Prometheus:  http://localhost:9090"
+                    echo "Alertmanager: http://localhost:9093"
+                    '''
+                    
+                    // Temporary port-forward for testing
+                    sh 'kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80 &'
                 }
             }
         }
