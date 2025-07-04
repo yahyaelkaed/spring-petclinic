@@ -1,1 +1,12 @@
-
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  kubernetes-cluster.json: |-
+    {"title": "K8s Cluster", "uid": "k8s-cluster", ...}  # (Paste from https://grafana.com/grafana/dashboards/315)
+  jenkins.json: |-
+    {"title": "Jenkins", "uid": "jenkins", ...}  # (Paste from https://grafana.com/grafana/dashboards/9964)
