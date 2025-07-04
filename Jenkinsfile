@@ -5,6 +5,7 @@ pipeline {
         MAVEN_HOME = tool 'maven-3.8.6'
         PATH = "${MAVEN_HOME}/bin:${PATH}"
         DOCKER_IMAGE = "yahyaelkaed/petclinic:${BUILD_NUMBER}"
+        HELM_VERSION = "3.12.0"
     }
 
     stages {
@@ -112,55 +113,87 @@ pipeline {
                 }
             }
         }
-        stage('Setup Monitoring Stack') {
+        stage('Install Helm') {
             steps {
                 script {
-                    // Create monitoring namespace
-                    sh 'kubectl apply -f monitoring/namespace.yaml'
-                    
-                    // Install Helm chart with ALL required configurations
+                    // Install Helm if not present
                     sh '''
-                    helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
-                      --namespace monitoring \
-                      --set grafana.adminPassword=admin \
-                      --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
-                      --set grafana.sidecar.dashboards.enabled=true \
-                      --set grafana.sidecar.dashboards.label=grafana_dashboard \
-                      --set alertmanager.enabled=true
+                    if ! command -v helm &> /dev/null; then
+                        echo "Installing Helm ${HELM_VERSION}..."
+                        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+                        chmod 700 get_helm.sh
+                        ./get_helm.sh --version v${HELM_VERSION}
+                    fi
+                    helm version
                     '''
-                    
-                    // Apply Grafana dashboards and Jenkins monitoring
-                    sh 'kubectl apply -f monitoring/grafana-dashboards.yaml'
-                    sh 'kubectl apply -f monitoring/jenkins-service-monitor.yaml'
                 }
             }
         }
+
+        stage('Setup Monitoring Stack') {
+            steps {
+                script {
+                    // 1. Create namespace and add Helm repo
+                    sh '''
+                    kubectl apply -f monitoring/namespace.yaml
+                    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                    helm repo update
+                    '''
+
+                    // 2. Install monitoring stack with persistent storage
+                    sh """
+                    helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
+                        --namespace monitoring \
+                        --set grafana.adminPassword='admin' \
+                        --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+                        --set grafana.sidecar.dashboards.enabled=true \
+                        --set grafana.sidecar.dashboards.label=grafana_dashboard \
+                        --set alertmanager.enabled=true \
+                        --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName="standard" \
+                        --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.accessModes[0]="ReadWriteOnce" \
+                        --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage="10Gi"
+                    """
+
+                    // 3. Apply additional configs
+                    sh '''
+                    kubectl apply -f monitoring/grafana-dashboards.yaml
+                    kubectl apply -f monitoring/jenkins-service-monitor.yaml
+                    '''
+                }
+            }
+        }
+
         stage('Verify Monitoring') {
             steps {
                 script {
-                    // Wait for components to be ready
-                    sh 'kubectl wait --for=condition=available -n monitoring deployment/prometheus-operator --timeout=300s'
-                    sh 'kubectl wait --for=condition=ready -n monitoring pod -l app.kubernetes.io/name=grafana --timeout=300s'
-                    
-                    // Print access information
+                    // 1. Verify components
                     sh '''
-                    echo "=== MONITORING URLs ==="
-                    echo "Grafana:     http://localhost:3000 (admin/$(kubectl get secret -n monitoring prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 --decode))"
+                    kubectl wait --for=condition=ready -n monitoring pod -l app.kubernetes.io/instance=monitoring-stack --timeout=300s
+                    '''
+
+                    // 2. Get access details
+                    sh '''
+                    echo "=== MONITORING ACCESS ==="
+                    echo "Grafana:     http://localhost:3000"
+                    echo "Username:    admin"
+                    echo "Password:    $(kubectl get secret -n monitoring monitoring-stack-grafana -o jsonpath="{.data.admin-password}" | base64 --decode)"
                     echo "Prometheus:  http://localhost:9090"
                     echo "Alertmanager: http://localhost:9093"
                     '''
-                    
-                    // Temporary port-forward for testing
-                    sh 'kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80 &'
+
+                    // 3. Temporary port-forward (for testing)
+                    sh 'kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80 &'
                 }
             }
         }
     }
+    
 
     post {
         always {
             archiveArtifacts 'target/*.jar'
             cleanWs()
+            sh 'pkill -f "kubectl port-forward" || true'
         }
         success {
             echo "✅ Pipeline completed successfully!"
