@@ -112,6 +112,20 @@ pipeline {
                 }
             }
         }
+        stage('Setup Monitoring Stack') {
+            steps {
+                script {
+                    // Deploy monitoring stack using Helm or kubectl
+                    sh 'kubectl apply -f monitoring/namespace.yaml'
+                    sh 'helm install prometheus prometheus-community/kube-prometheus-stack -n monitoring'
+                    
+                    // Alternatively, you can use kubectl with your own manifests
+                    // sh 'kubectl apply -f monitoring/prometheus/'
+                    // sh 'kubectl apply -f monitoring/grafana/'
+                    // sh 'kubectl apply -f monitoring/alertmanager/'
+                }
+            }
+        }
     }
 
     post {
