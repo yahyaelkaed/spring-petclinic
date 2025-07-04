@@ -120,26 +120,26 @@ pipeline {
         stage('Setup Monitoring') {
             steps {
                 script {
-                    bat """
+                    sh """
                         kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
                         
-                        %HELM_PATH% repo add prometheus-community https://prometheus-community.github.io/helm-charts
-                        %HELM_PATH% upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack ^
-                            --namespace monitoring ^
-                            --set grafana.adminPassword=admin ^
-                            --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false ^
-                            --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true ^
-                            --set kubelet.serviceMonitor.https=false ^
-                            --set prometheus.prometheusSpec.evaluationInterval=5m ^
-                            --set prometheus.prometheusSpec.scrapeInterval=5m ^
-                            --set prometheus.prometheusSpec.resources.requests.cpu=200m ^
-                            --set prometheus.prometheusSpec.resources.requests.memory=400Mi ^
-                            --set prometheus.prometheusSpec.resources.limits.cpu=500m ^
-                            --set prometheus.prometheusSpec.resources.limits.memory=1Gi ^
-                            --set grafana.resources.requests.cpu=100m ^
-                            --set grafana.resources.requests.memory=256Mi ^
-                            --set alertmanager.enabled=false ^
-                            --set kube-state-metrics.enabled=false ^
+                        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                        helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
+                            --namespace monitoring \
+                            --set grafana.adminPassword=admin \
+                            --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+                            --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true \
+                            --set kubelet.serviceMonitor.https=false \
+                            --set prometheus.prometheusSpec.evaluationInterval=5m \
+                            --set prometheus.prometheusSpec.scrapeInterval=5m \
+                            --set prometheus.prometheusSpec.resources.requests.cpu=200m \
+                            --set prometheus.prometheusSpec.resources.requests.memory=400Mi \
+                            --set prometheus.prometheusSpec.resources.limits.cpu=500m \
+                            --set prometheus.prometheusSpec.resources.limits.memory=1Gi \
+                            --set grafana.resources.requests.cpu=100m \
+                            --set grafana.resources.requests.memory=256Mi \
+                            --set alertmanager.enabled=false \
+                            --set kube-state-metrics.enabled=false \
                             --set nodeExporter.enabled=false
                     """
                 }
@@ -149,13 +149,13 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
-                    bat """
+                    sh """
                         kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
-                        echo === MONITORING ACCESS ===
-                        echo 1. Run port-forwarding:
-                        echo kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80
-                        echo 2. Access Grafana at http://localhost:3000
-                        echo 3. Credentials: admin/admin
+                        echo "=== MONITORING ACCESS ==="
+                        echo "1. Run port-forwarding:"
+                        echo "kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80 &"
+                        echo "2. Access Grafana at http://localhost:3000"
+                        echo "3. Credentials: admin/admin"
                     """
                 }
             }
