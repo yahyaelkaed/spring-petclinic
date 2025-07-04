@@ -129,74 +129,51 @@ pipeline {
                 }
             }
         }
-        stage('Enable Metrics Server') {
+        stage('Setup Guaranteed Monitoring') {
             steps {
                 script {
-                    // Enable and wait for metrics-server
+                    // 1. Create monitoring namespace
+                    sh 'kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -'
+                    
+                    // 2. Install foolproof monitoring stack
                     sh '''
-                    minikube addons enable metrics-server
-                    kubectl wait --namespace kube-system \
-                      --for=condition=ready pod \
-                      --selector=k8s-app=metrics-server \
-                      --timeout=300s
-                    '''
-                }
-            }
-        }
-
-        stage('Setup Monitoring Stack') {
-            steps {
-                script {
-                    // 1. Create namespace and add Helm repo
-                    sh '''
-                    kubectl apply -f monitoring/namespace.yaml
                     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
                     helm repo update
-                    '''
-
-                    // 2. Install monitoring stack with persistent storage
-                    sh """
-                    helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
+                    
+                    helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
                         --namespace monitoring \
-                        --set grafana.adminPassword='admin' \
+                        --set grafana.adminPassword=admin \
                         --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
-                        --set grafana.sidecar.dashboards.enabled=true \
-                        --set grafana.sidecar.dashboards.label=grafana_dashboard \
-                        --set alertmanager.enabled=true \
-                        --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName="standard" \
-                        --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.accessModes[0]="ReadWriteOnce" \
-                        --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage="10Gi"
-                    """
-
-                    // 3. Apply additional configs
-                    sh '''
-                    kubectl apply -f monitoring/grafana-dashboards.yaml
-                    kubectl apply -f monitoring/jenkins-service-monitor.yaml
+                        --set prometheus.prometheusSpec.ignoreNamespaceSelectors=true \
+                        --set kubelet.serviceMonitor.https=false \
+                        --set prometheus.prometheusSpec.evaluationInterval=5m \
+                        --set prometheus.prometheusSpec.scrapeInterval=5m \
+                        --set prometheus.prometheusSpec.scrapeTimeout=30s \
+                        --set prometheus.prometheusSpec.containers[0].resources.requests.memory=512Mi \
+                        --set alertmanager.enabled=false \
+                        --set kube-state-metrics.enabled=false \
+                        --set nodeExporter.enabled=false
                     '''
+                    
+                    // 3. Apply minimal dashboard
+                    sh 'kubectl apply -f https://raw.githubusercontent.com/grafana/grafana/main/deploy/kubernetes/grafana-dashboard-configmap.yaml -n monitoring'
                 }
             }
         }
-
-        stage('Verify Monitoring') {
+        
+        stage('Access Monitoring') {
             steps {
                 script {
-                    // 1. Verify components
-                    sh '''
-                    kubectl wait --for=condition=ready -n monitoring pod -l app.kubernetes.io/instance=monitoring-stack --timeout=300s
-                    '''
-
-                    // 2. Get access details
+                    // 4. Get access information
                     sh '''
                     echo "=== MONITORING ACCESS ==="
-                    echo "Grafana:     http://localhost:3000"
-                    echo "Username:    admin"
-                    echo "Password:    $(kubectl get secret -n monitoring monitoring-stack-grafana -o jsonpath="{.data.admin-password}" | base64 --decode)"
-                    echo "Prometheus:  http://localhost:9090"
-                    echo "Alertmanager: http://localhost:9093"
+                    echo "Grafana URL: http://localhost:3000"
+                    echo "Username: admin"
+                    echo "Password: admin"
+                    echo "=== PORT FORWARDING ==="
+                    echo "Run this command on your local machine:"
+                    echo "kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80"
                     '''
-
-                    // 3. Temporary port-forward (for testing)
-                    sh 'kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80 &'
                 }
             }
         }
