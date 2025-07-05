@@ -1,25 +1,17 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: jenkins
+  name: jenkins-force
   namespace: monitoring
-  labels:
-    release: monitoring-stack
 spec:
-  selector:
-    matchLabels:
-      app: jenkins
-  namespaceSelector:
-    matchNames:
-      - default
   endpoints:
-  - port: http
+  - interval: 30s
+    targetPort: 8080
     path: /prometheus
-    interval: 30s
-    basicAuth:
-      username:
-        name: jenkins-auth
-        key: username
-      password:
-        name: jenkins-auth
-        key: password
+    scheme: http
+    params:
+      auth:
+      - username: admin
+      - password: admin123
+    staticConfigs:
+      - targets: ['jenkins.default.svc.cluster.local']
