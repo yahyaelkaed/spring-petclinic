@@ -125,7 +125,7 @@ pipeline {
                         # sleep 5
         
                         # Recreate monitoring namespace
-                        kubectl create namespace monitoring
+                        # kubectl create namespace monitoring
         
                         # Install kube-prometheus-stack with minimal components
                         helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
