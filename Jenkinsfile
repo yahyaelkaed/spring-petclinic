@@ -147,16 +147,33 @@ pipeline {
             }
         }
 
+        stage('Setup Jenkins Monitoring') {
+            steps {
+                script {
+                    withCredentials([file(credentialsId: 'minikube-kubeconfig1', variable: 'KUBECONFIG_FILE')]) {
+                        sh '''
+                            mkdir -p $HOME/.kube
+                            cp $KUBECONFIG_FILE $HOME/.kube/config
+        
+                            kubectl apply -f k8s/jenkins-servicemonitor.yaml
+                        '''
+                    }
+                }
+            }
+        }
+
+
         stage('Verify Deployment') {
             steps {
                 script {
                     sh """
                         kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
-                        echo "=== MONITORING ACCESS ==="
-                        echo "1. Run port-forwarding:"
-                        echo "kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80 &"
-                        echo "2. Access Grafana at http://localhost:3000"
-                        echo "3. Credentials: admin/admin"
+                        echo '=== MONITORING ACCESS ==='
+                        echo '1. Run port-forwarding:'
+                        echo 'kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80 &'
+                        echo '2. Access Grafana at http://localhost:3000'
+                        echo '3. Credentials: admin/admin'
+                        echo '4. Check Jenkins metrics scraping in Prometheus UI (under Status > Targets)'
                     """
                 }
             }
