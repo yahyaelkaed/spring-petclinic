@@ -12,6 +12,6 @@ spec:
     params:
       auth:
       - username: admin
-      - password: admin123
+      - password: apolios
     staticConfigs:
       - targets: ['jenkins.default.svc.cluster.local']
