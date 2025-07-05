@@ -119,15 +119,11 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        # Delete any old installs
-                        # helm uninstall monitoring-stack -n monitoring || true
-                        # kubectl delete namespace monitoring || true
-                        # sleep 5
-        
-                        # Recreate monitoring namespace
-                        # kubectl create namespace monitoring
-        
+                        # Create monitoring namespace if not exists (ignore errors)
+                        kubectl get ns monitoring || kubectl create ns monitoring
+                        
                         # Install kube-prometheus-stack with minimal components
+                        # Disable metrics-server and node-exporter to avoid metrics.k8s.io API errors
                         helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
                             --namespace monitoring \
                             --set grafana.adminPassword=admin \
@@ -137,15 +133,15 @@ pipeline {
                             --set kube-state-metrics.enabled=false \
                             --set nodeExporter.enabled=false \
                             --set metrics-server.enabled=false \
-                            --set prometheus.prometheusSpec.evaluationInterval=5m \
-                            --set prometheus.prometheusSpec.scrapeInterval=5m \
+                            --set alertmanager.enabled=true \
+                            --set prometheus.prometheusSpec.evaluationInterval=30s \
+                            --set prometheus.prometheusSpec.scrapeInterval=30s \
                             --set prometheus.prometheusSpec.resources.requests.cpu=200m \
                             --set prometheus.prometheusSpec.resources.requests.memory=400Mi \
                             --set prometheus.prometheusSpec.resources.limits.cpu=500m \
                             --set prometheus.prometheusSpec.resources.limits.memory=1Gi \
                             --set grafana.resources.requests.cpu=100m \
-                            --set grafana.resources.requests.memory=256Mi \
-                            --set alertmanager.enabled=false
+                            --set grafana.resources.requests.memory=256Mi
                     '''
                 }
             }
