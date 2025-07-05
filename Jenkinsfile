@@ -118,11 +118,16 @@ pipeline {
         stage('Setup Monitoring') {
             steps {
                 script {
-                    // 1. Create namespace without dry-run (simplest approach)
-                    sh 'kubectl create namespace monitoring || true'
-                    
-                    // 2. Install monitoring stack with ALL metrics components disabled
                     sh '''
+                        # Delete any old installs
+                        helm uninstall monitoring-stack -n monitoring || true
+                        kubectl delete namespace monitoring || true
+                        sleep 5
+        
+                        # Recreate monitoring namespace
+                        kubectl create namespace monitoring
+        
+                        # Install kube-prometheus-stack with minimal components
                         helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
                             --namespace monitoring \
                             --set grafana.adminPassword=admin \
@@ -141,20 +146,6 @@ pipeline {
                             --set grafana.resources.requests.cpu=100m \
                             --set grafana.resources.requests.memory=256Mi \
                             --set alertmanager.enabled=false
-                    '''
-                    
-                    // 3. Forcefully delete metrics-server if it exists
-                    sh '''
-                        kubectl delete apiservice v1beta1.metrics.k8s.io || true
-                        kubectl delete -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml || true
-                    '''
-                    
-                    // 4. Verify Grafana is running (the only component we care about)
-                    sh '''
-                        kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
-                        echo "✅ Monitoring stack installed successfully!"
-                        echo "Access Grafana at: http://localhost:3000 (after port-forwarding)"
-                        echo "Run: kubectl port-forward -n monitoring svc/monitoring-stack-grafana 3000:80"
                     '''
                 }
             }
