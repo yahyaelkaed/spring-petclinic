@@ -13,6 +13,13 @@ spec:
     matchNames:
       - default
   endpoints:
-    - port: metrics
-      path: /prometheus
-      interval: 30s
+  - port: http
+    path: /prometheus
+    interval: 30s
+    basicAuth:
+      username:
+        name: jenkins-auth
+        key: username
+      password:
+        name: jenkins-auth
+        key: password
