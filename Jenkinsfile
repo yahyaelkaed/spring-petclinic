@@ -167,6 +167,8 @@ pipeline {
             steps {
                 script {
                     sh """
+                        set +e
+                        export KUBECTL_TIMEOUT="--request-timeout=5s"
                         kubectl wait --for=condition=available -n monitoring deployment/monitoring-stack-grafana --timeout=300s
                         echo '=== MONITORING ACCESS ==='
                         echo '1. Run port-forwarding:'
