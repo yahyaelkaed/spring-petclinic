@@ -120,9 +120,9 @@ pipeline {
                 script {
                     sh '''
                         # Delete any old installs
-                        helm uninstall monitoring-stack -n monitoring || true
-                        kubectl delete namespace monitoring || true
-                        sleep 5
+                        # helm uninstall monitoring-stack -n monitoring || true
+                        # kubectl delete namespace monitoring || true
+                        # sleep 5
         
                         # Recreate monitoring namespace
                         kubectl create namespace monitoring
