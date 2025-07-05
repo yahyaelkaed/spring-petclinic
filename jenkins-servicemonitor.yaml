@@ -1,22 +1,18 @@
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+apiVersion: v1
+kind: Service
 metadata:
-  name: jenkins-nodeport
-  namespace: monitoring
-  labels:
-    release: monitoring-stack
+  name: jenkins
+  namespace: default
 spec:
-  endpoints:
-  - port: http
-    path: /prometheus
-    interval: 30s
-    relabelings:
-    - action: replace
-      sourceLabels: [__address__]
-      targetLabel: __address__
-      replacement: "192.168.49.2:31251"  # Your Minikube IP + NodePort
   selector:
-    matchLabels:
-      app: jenkins
-  namespaceSelector:
-    matchNames: [default]
+    app: jenkins
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: agent
+      port: 50000
+      targetPort: 50000
+    - name: metrics
+      port: 8080
+      targetPort: 8080
