@@ -13,6 +13,6 @@ spec:
     matchNames:
       - default  # or the namespace where Jenkins runs
   endpoints:
-  - port: metrics
+  - port: http
     path: /prometheus
     interval: 30s
